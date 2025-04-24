@@ -1,7 +1,5 @@
 package com.surendramaran.yolov8tflite
 
-import kotlin.math.sqrt
-
 // DetectionUtils.kt
 object DetectionUtils {
     // Shared class thresholds
@@ -30,63 +28,94 @@ object DetectionUtils {
 
     )
 
-
-
     // Shared position weights
     val positionWeights = mapOf(
-        "floor" to 1.0f,
-        "center" to 0.9f,
+        "floor" to 1.1f,
+        "center" to 1.0f,
         "left" to 0.7f,
         "right" to 0.7f
     )
 
+
+
+    // New ground detection logic
+    fun isOnGround(box: BoundingBox): Boolean {
+        val isBottomInFloorZone = box.y2 > 0.85f    // More strict bottom position
+        val isCompactObject = box.h < 0.25f         // Max 25% of screen height
+        val isWideObject = box.w > 0.4f             // Min 40% of screen width
+
+        return when (box.clsName) {
+            "chair", "potted plant" -> isBottomInFloorZone && isCompactObject
+            "person" -> false  // Never classify people as floor objects
+            else -> isBottomInFloorZone && (isCompactObject || isWideObject)
+        }
+    }
+
+    // Updated position weighting
+    fun getPositionWeight(box: BoundingBox): Float {
+        return when {
+            isOnGround(box) -> positionWeights["floor"]!!
+            box.cx < 0.35f -> positionWeights["left"]!! * elevationFactor(box)
+            box.cx > 0.65f -> positionWeights["right"]!! * elevationFactor(box)
+            else -> positionWeights["center"]!! * elevationFactor(box)
+        }
+    }
+
+    private fun elevationFactor(box: BoundingBox): Float {
+        val verticalPosition = 1 - (box.y1 + box.h/2) // Center Y coordinate
+        return 0.8f + (verticalPosition * 0.4f) // 0.8-1.2 range based on height
+    }
+
+    // Improved priority calculation
     fun calculatePriorityScore(box: BoundingBox): Float {
         val normalizedArea = box.w * box.h
         val classWeight = 1 - (classThresholds[box.clsName] ?: classThresholds["default"]!!)
         val positionWeight = getPositionWeight(box)
-        return (normalizedArea * 2.5f) + (classWeight * 1.8f) + (positionWeight * 2.0f)
+        val elevationWeight = 1 + (box.y1 * 0.5f) // Higher objects get slight boost
+
+        return (normalizedArea * 2.0f) +
+                (classWeight * 2.0f) +
+                (positionWeight * 1.5f) +
+                (elevationWeight * 0.5f)
     }
 
-    fun getPositionWeight(box: BoundingBox): Float {
-        val (xCenter, yBottom) = box.cx to box.y2
-        return when {
-            yBottom > 0.8f -> positionWeights["floor"]!!
-            xCenter in 0.3f..0.7f -> positionWeights["center"]!!
-            xCenter < 0.3f -> positionWeights["left"]!!
-            else -> positionWeights["right"]!!
-        }
-    }
+
 
     fun getDisplayClassName(originalName: String): String {
         return if (classThresholds.containsKey(originalName)) originalName else "obstacle"
     }
 
-    fun estimateDistance(box: BoundingBox): Float {
-        val normalizedArea = box.w * box.h
-        if (normalizedArea <= 0f) return Float.MAX_VALUE
-
-        val threshold = classThresholds[box.clsName] ?: classThresholds["default"]!!
-        val ratio = threshold / normalizedArea
-        val distance = sqrt(ratio.toDouble()).toFloat() * 2.0f // Heuristic adjustment
-
-        return distance.coerceIn(0.5f, 20.0f) // Clamp to reasonable values
-    }
-
     fun generateAlertMessage(box: BoundingBox): String {
         val displayName = getDisplayClassName(box.clsName).replace("_", " ")
         val position = getPositionDescription(box)
-        val distance = "%.1f meters".format(estimateDistance(box))
-        return "$displayName $position, $distance"
+        return "$displayName $position"
     }
+
 
     fun getPositionDescription(box: BoundingBox): String {
         return when {
-            box.y2 > 0.8f -> "ahead on the floor"
-            box.cx < 0.3f -> "on your left"
-            box.cx > 0.7f -> "on your right"
+            isOnGround(box) -> "on the floor ${getHorizontalPosition(box)}"
+            else -> "${getVerticalPosition(box)} ${getHorizontalPosition(box)}"
+        }
+    }
+
+    private fun getHorizontalPosition(box: BoundingBox): String {
+        return when {
+            box.cx < 0.35f -> "to your left"
+            box.cx > 0.65f -> "to your right"
             else -> "ahead"
         }
     }
+
+    private fun getVerticalPosition(box: BoundingBox): String {
+        val centerY = box.y1 + box.h/2
+        return when {
+            centerY < 0.3f -> "high up"
+            centerY > 0.7f -> "low down"
+            else -> ""
+        }
+    }
+
 
     fun filterAndPrioritize(boxes: List<BoundingBox>): List<BoundingBox> {
         val filtered = boxes.filter { box ->

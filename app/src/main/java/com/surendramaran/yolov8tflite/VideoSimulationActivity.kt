@@ -1,25 +1,18 @@
 package com.surendramaran.yolov8tflite
 
 import android.content.Intent
-import android.Manifest
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import com.surendramaran.yolov8tflite.Constants.LABELS_PATH
 import com.surendramaran.yolov8tflite.Constants.MODEL_PATH
 import com.surendramaran.yolov8tflite.databinding.ActivityVideoSimulationBinding
@@ -34,7 +27,6 @@ class VideoSimulationActivity : AppCompatActivity(), Detector.DetectorListener {
     private var isProcessing = false
     private lateinit var handler: Handler
     private var frameExtractor: Runnable? = null
-    private lateinit var speechRecognizer: SpeechRecognizer
 
     // TTS components
     private lateinit var tts: TextToSpeech
@@ -43,9 +35,6 @@ class VideoSimulationActivity : AppCompatActivity(), Detector.DetectorListener {
     private val COOLDOWN_MS = 3000
     private val alertHistory = mutableMapOf<String, Long>()
     private val HISTORY_EXPIRATION_MS = 8000L
-
-    private val REQUEST_RECORD_AUDIO = 101
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,68 +46,6 @@ class VideoSimulationActivity : AppCompatActivity(), Detector.DetectorListener {
         setupFilePicker()
         setupControls()
         initTTS()
-        setupVoiceControl()
-    }
-
-    private fun setupVoiceControl() {
-        if (SpeechRecognizer.isRecognitionAvailable(this)) {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-                setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(p0: Bundle?) {
-                        TODO("Not yet implemented")
-                    }
-
-                    override fun onBeginningOfSpeech() {
-                        TODO("Not yet implemented")
-                    }
-
-                    override fun onRmsChanged(p0: Float) {
-                        TODO("Not yet implemented")
-                    }
-
-                    override fun onBufferReceived(p0: ByteArray?) {
-                        TODO("Not yet implemented")
-                    }
-
-                    override fun onEndOfSpeech() {
-                        TODO("Not yet implemented")
-                    }
-
-                    override fun onError(p0: Int) {
-                        TODO("Not yet implemented")
-                    }
-
-                    // Implement all required methods
-                    override fun onResults(results: Bundle?) {
-                        results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.let {
-                            processVoiceCommand(it)
-                        }
-                    }
-
-                    override fun onPartialResults(p0: Bundle?) {
-                        TODO("Not yet implemented")
-                    }
-
-                    override fun onEvent(p0: Int, p1: Bundle?) {
-                        TODO("Not yet implemented")
-                    }
-                    // ... other override methods ...
-                })
-            }
-        }
-    }
-
-    private fun processVoiceCommand(command: String) {
-        when (command.trim().lowercase()) {
-            "start" -> if (!isProcessing) toggleProcessing()
-            "stop" -> if (isProcessing) toggleProcessing()
-        }
-    }
-
-    private fun toggleProcessing() {
-        isProcessing = !isProcessing
-        binding.btnToggleProcessing.text = if (isProcessing) "Stop Processing" else "Start Processing"
-        if (isProcessing) startProcessing() else stopProcessing()
     }
 
     private fun initTTS() {
@@ -208,9 +135,6 @@ class VideoSimulationActivity : AppCompatActivity(), Detector.DetectorListener {
         }
     }
 
-
-
-
     private fun setupControls() {
         binding.btnToggleProcessing.setOnClickListener {
             isProcessing = !isProcessing
@@ -222,35 +146,7 @@ class VideoSimulationActivity : AppCompatActivity(), Detector.DetectorListener {
                 binding.btnToggleProcessing.text = "Start Processing"
             }
         }
-
-        binding.btnVoiceControl.setOnClickListener {
-            if (checkPermission()) startVoiceRecognition()
-        }
     }
-
-    private fun checkPermission(): Boolean {
-        return if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_RECORD_AUDIO)
-            false
-        } else true
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_RECORD_AUDIO && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            startVoiceRecognition()
-        }
-    }
-
-    private fun startVoiceRecognition() {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Say 'start' or 'stop'")
-        }
-        speechRecognizer.startListening(intent)
-    }
-
-
 
     private fun startProcessing() {
         videoUri?.let { uri ->
@@ -352,6 +248,14 @@ class VideoSimulationActivity : AppCompatActivity(), Detector.DetectorListener {
             processNextAlert()
         }
     }
+
+    // Simplify the generateAlertMessage function
+    private fun generateAlertMessage(box: BoundingBox): String {
+        val position = DetectionUtils.getPositionDescription(box)
+        return "${box.clsName.replace("_", " ")} $position"
+    }
+
+// Remove the generateAlertKey function and use DetectionUtils version
 
 
     override fun onDestroy() {
