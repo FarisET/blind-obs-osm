@@ -85,8 +85,7 @@ android {
         implementation("com.squareup.retrofit2:converter-gson:2.9.0")
         implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
 
-        // Bonus features (optional but recommended)
-//    implementation ("org.osmdroid:osmdroid-mapsforge:6.1.16")
-//    implementation ("org.osmdroid:osmdroid-geopackage:6.1.16")
+        implementation("com.google.android.gms:play-services-location:21.0.1")
+
     }
 }

@@ -33,6 +33,123 @@
         android:padding="8dp"
         android:visibility="gone" />
 
-    <!-- Add additional UI elements here for your navigation features -->
+    <!-- Navigation Input Section -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Enter Navigation Details"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Source Location Section -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Source Location:"
+            android:textStyle="bold"/>
+
+        <AutoCompleteTextView
+            android:id="@+id/sourceLocationInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Enter source location"
+            android:completionThreshold="1"
+            android:dropDownHeight="wrap_content"
+            android:imeOptions="actionNext"
+            android:inputType="text" />
+
+        <TextView
+            android:id="@+id/sourceCoordinatesText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:text="Coordinates: Not set"
+            android:layout_marginTop="4dp" />
+
+        <Button
+            android:id="@+id/useCurrentLocationButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Use Current Location"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
+    <!-- Destination Location Section -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Destination Location:"
+            android:textStyle="bold" />
+
+
+
+        <AutoCompleteTextView
+            android:id="@+id/destinationLocationInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Enter destination location"
+            android:completionThreshold="1"
+            android:dropDownHeight="wrap_content"
+            android:imeOptions="actionDone"
+            android:inputType="text" />
+
+        <Button
+            android:id="@+id/manualDestinationButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Set Coordinates Manually"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/destinationCoordinatesText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:text="Coordinates: Not set"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
+    <!-- Navigation Options -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Navigation Profile:"
+            android:textStyle="bold"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="8dp" />
+
+        <Spinner
+            android:id="@+id/profileSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <!-- Start Navigation Button -->
+    <Button
+        android:id="@+id/startNavigationButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Start Navigation"
+        android:enabled="false" />
 
 </LinearLayout>
