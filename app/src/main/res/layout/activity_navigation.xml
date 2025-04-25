@@ -9,13 +9,23 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <!-- Status Text for API Connection & Navigation -->
         <TextView
-            android:id="@+id/statusText"
+            android:id="@+id/apiStatusText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Checking OsmAnd installation..."
+            android:text="OsmAnd API Status: Not Connected"
             android:textStyle="bold"
             android:padding="8dp"/>
+
+        <TextView
+            android:id="@+id/navigationStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Navigation: Idle"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="8dp"/>
 
         <TextView
             android:layout_width="match_parent"
@@ -27,14 +37,12 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal">
-
             <RadioButton
                 android:id="@+id/useCurrentLocationRadio"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Use Current Location"
                 android:checked="true"/>
-
             <RadioButton
                 android:id="@+id/useCustomLocationRadio"
                 android:layout_width="wrap_content"
@@ -56,20 +64,16 @@
             android:text="Destination:"
             android:layout_marginTop="16dp"/>
 
-
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Destination">
-
+            android:hint="Destination (Address or Lat,Lon)">
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                 android:id="@+id/endLocationEdit"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="textAutoComplete"/>
         </com.google.android.material.textfield.TextInputLayout>
-
-
 
         <TextView
             android:layout_width="match_parent"
@@ -82,20 +86,17 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal">
-
             <RadioButton
                 android:id="@+id/carModeRadio"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Car"
                 android:checked="true"/>
-
             <RadioButton
                 android:id="@+id/bikeModeRadio"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Bicycle"/>
-
             <RadioButton
                 android:id="@+id/walkModeRadio"
                 android:layout_width="wrap_content"
@@ -112,22 +113,28 @@
 
             <ProgressBar
                 android:id="@+id/progressBar"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:visibility="gone"/>
-
-            <TextView
-                android:id="@+id/errorText"
+                style="?android:attr/progressBarStyleHorizontal"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:indeterminate="true"
                 android:visibility="gone"/>
 
             <Button
                 android:id="@+id/navigateButton"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Start Navigation"
+                android:text="Start Navigation via API"
                 android:padding="16dp"/>
+
+            <Button
+                android:id="@+id/stopNavigateButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Stop Navigation"
+                android:layout_marginTop="8dp"
+                android:visibility="gone"
+                android:padding="16dp"/>
+
         </LinearLayout>
 
     </LinearLayout>
