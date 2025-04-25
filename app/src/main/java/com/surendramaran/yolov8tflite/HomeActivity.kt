@@ -52,9 +52,9 @@ class HomeActivity : AppCompatActivity() {
             startActivity(Intent(this, VideoSimulationActivity::class.java))
         }
 
-//        binding.cardNavigation.setOnClickListener {
-//            startActivity(Intent(this, NavigationActivity::class.java))
-//        }
+        binding.cardNavigation.setOnClickListener {
+            startActivity(Intent(this, NavigationActivity::class.java))
+        }
     }
 
     override fun onRequestPermissionsResult(

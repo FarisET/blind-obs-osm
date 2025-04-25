@@ -63,7 +63,7 @@
         <receiver android:name=".NavigationReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="net.osmand.navigation" />
+                <action android:name="net.osmand" />
             </intent-filter>
         </receiver>
 
