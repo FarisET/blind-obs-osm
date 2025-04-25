@@ -120,6 +120,7 @@ import net.osmand.aidlapi.profile.ExportProfileParams;
 import net.osmand.aidlapi.exit.ExitAppParams;
 
 import net.osmand.aidlapi.logcat.ALogcatListenerParams;
+
 // NOTE: Add new methods at the end of file!!!
 
 interface IOsmAndAidlInterface {
