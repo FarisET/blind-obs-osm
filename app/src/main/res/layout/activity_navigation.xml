@@ -53,32 +53,21 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Source Location:"
+            android:text="Current Location:"
             android:textStyle="bold"/>
-
-        <AutoCompleteTextView
-            android:id="@+id/sourceLocationInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Enter source location"
-            android:completionThreshold="1"
-            android:dropDownHeight="wrap_content"
-            android:imeOptions="actionNext"
-            android:inputType="text" />
 
         <TextView
             android:id="@+id/sourceCoordinatesText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:text="Coordinates: Not set"
+            android:text="Waiting for location..."
             android:layout_marginTop="4dp" />
 
         <Button
             android:id="@+id/useCurrentLocationButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Use Current Location"
+            android:text="Refresh Location"
             android:layout_marginTop="4dp" />
     </LinearLayout>
 
@@ -92,34 +81,20 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Destination Location:"
+            android:text="Select Destination:"
             android:textStyle="bold" />
 
-
-
-        <AutoCompleteTextView
-            android:id="@+id/destinationLocationInput"
+        <Spinner
+            android:id="@+id/destinationSpinner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Enter destination location"
-            android:completionThreshold="1"
-            android:dropDownHeight="wrap_content"
-            android:imeOptions="actionDone"
-            android:inputType="text" />
-
-        <Button
-            android:id="@+id/manualDestinationButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Set Coordinates Manually"
-            android:layout_marginTop="4dp" />
+            android:layout_marginTop="8dp" />
 
         <TextView
             android:id="@+id/destinationCoordinatesText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:text="Coordinates: Not set"
+            android:text="No destination selected"
             android:layout_marginTop="4dp" />
     </LinearLayout>
 

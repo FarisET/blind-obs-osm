@@ -62,7 +62,11 @@ class NavigationActivity : AppCompatActivity() {
 
         // Navigation profiles available in OsmAnd
         private val NAVIGATION_PROFILES = arrayOf(
-            "car", "bicycle", "pedestrian", "public_transport", "boat"
+//            "car",
+//            "bicycle",
+            "pedestrian",
+//            "public_transport",
+//            "boat"
         )
 
         // Nominatim API for geocoding (OpenStreetMap service)
@@ -101,19 +105,75 @@ class NavigationActivity : AppCompatActivity() {
     private val sourceLocationSuggestions = mutableListOf<LocationSuggestion>()
     private val destinationLocationSuggestions = mutableListOf<LocationSuggestion>()
 
+    private lateinit var destinationSpinner: Spinner // Changed from AutoCompleteTextView
+//    private lateinit var sourceCoordinatesText: TextView
+//    private lateinit var destinationCoordinatesText: TextView
+
+
+    data class FixedDestination(
+        val name: String,
+        val address: String,
+        val lat: Double,
+        val lon: Double
+    )
+
+    private val fixedDestinations = listOf(
+//        FixedDestination(
+//            "IBA Alumni Students' Center",
+//            "IBA Alumni Students' Center, KU Circular Road, Gulshan-e-Kaneez Fatima Society, Gulshan-e-Iqbal Town, Gulshan District, Karachi Division, 75300, Pakistan",
+//            24.94057925,
+//            67.11293312086875
+//        ),
+        FixedDestination(
+            "Mian Abdullah Library",
+            "Mian Abdullah Library, KU Circular Road, Gulshan-e-Kaneez Fatima Society, Gulshan-e-Iqbal Town, Gulshan District, Karachi Division, 75300, Pakistan",
+            24.94086575,
+            67.1150593333021
+        ),
+        FixedDestination(
+            "IBA Soccer Field",
+            "IBA Soccer Field, KU Circular Road, Gulshan-e-Kaneez Fatima Society, Gulshan-e-Iqbal Town, Gulshan District, Karachi Division, 75300, Pakistan",
+            24.94172,
+            67.11383
+
+        ),
+        FixedDestination(
+            "Mubarak Masjid",
+            "Q2WV+66J, DHA Phase 5 Defence V Defence Housing Authority, Karachi, 75500, Pakistan",
+            24.79540,
+            67.04332
+
+        ),
+//        FixedDestination(
+//            "Royale Rodale",
+//            "TC-V 34th St, Off Khayaban - e - Seher Phase V Defence V Defence Housing Authority, Karachi, 75500, Pakistan",
+//            24.79153, 67.04678
+//        )
+
+//                FixedDestination(
+//                "Tabba building",
+//        "Tabba building, KU Circular Road, Gulshan-e-Kaneez Fatima Society, Gulshan-e-Iqbal Town, Gulshan District, Karachi Division, 75300, Pakistan",
+//                    24.94172,
+//                    67.11383
+//
+//    )
+    )
+
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_navigation)
 
         // Initialize UI elements
         apiStatusText = findViewById(R.id.apiStatusText)
-        sourceLocationInput = findViewById(R.id.sourceLocationInput)
-        destinationLocationInput = findViewById(R.id.destinationLocationInput)
         sourceCoordinatesText = findViewById(R.id.sourceCoordinatesText)
         destinationCoordinatesText = findViewById(R.id.destinationCoordinatesText)
         useCurrentLocationButton = findViewById(R.id.useCurrentLocationButton)
         profileSpinner = findViewById(R.id.profileSpinner)
         startNavigationButton = findViewById(R.id.startNavigationButton)
+        destinationSpinner = findViewById(R.id.destinationSpinner) // Add this Spinner to your XML
+        useCurrentLocationButton = findViewById(R.id.useCurrentLocationButton)
 
         // Try to find version TextView - not required
         try {
@@ -142,15 +202,20 @@ class NavigationActivity : AppCompatActivity() {
         setupProfileSpinner()
 
         // Set up location search
-        setupLocationSearch()
 
         // Set up buttons
         setupButtons()
 
-        val manualDestinationButton: Button = findViewById(R.id.manualDestinationButton)
-        manualDestinationButton.setOnClickListener {
-            showManualCoordinateDialog()
+        // Setup destination spinner
+        setupDestinationSpinner()
+
+        // Automatically get current location on launch
+        if (checkLocationPermission()) {
+            getCurrentLocation()
+        } else {
+            requestLocationPermission()
         }
+
 
 
         // First, check if OsmAnd is installed
@@ -186,64 +251,7 @@ class NavigationActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupLocationSearch() {
-        // Setup autocomplete adapters - using a simpler adapter type
-        val sourceAdapter = ArrayAdapter<String>(this, android.R.layout.simple_dropdown_item_1line, ArrayList())
-        val destinationAdapter = ArrayAdapter<String>(this, android.R.layout.simple_dropdown_item_1line, ArrayList())
 
-        sourceLocationInput.setAdapter(sourceAdapter)
-        destinationLocationInput.setAdapter(destinationAdapter)
-
-        // Add text change listeners
-        sourceLocationInput.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                if (s != null && s.length >= 3) {
-                    // Debug log
-                    Log.d(TAG, "Searching for source location: ${s.toString()}")
-                    searchLocation(s.toString(), true, sourceAdapter)
-                }
-            }
-        })
-
-        destinationLocationInput.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                if (s != null && s.length >= 3) {
-                    // Debug log
-                    Log.d(TAG, "Searching for destination location: ${s.toString()}")
-                    searchLocation(s.toString(), false, destinationAdapter)
-                }
-            }
-        })
-
-        // Set dropdown to show with less strict conditions
-        sourceLocationInput.threshold = 1
-        destinationLocationInput.threshold = 1
-
-        // Handle item selection
-        sourceLocationInput.onItemClickListener = AdapterView.OnItemClickListener { _, _, position, _ ->
-            // Make sure we don't try to access an out-of-bounds item
-            if (position < sourceLocationSuggestions.size) {
-                val selectedLocation = sourceLocationSuggestions[position]
-                sourceLocation = Pair(selectedLocation.lat, selectedLocation.lon)
-                sourceCoordinatesText.text = "Coordinates: ${selectedLocation.lat}, ${selectedLocation.lon}"
-                updateStartNavigationButton()
-            }
-        }
-
-        destinationLocationInput.onItemClickListener = AdapterView.OnItemClickListener { _, _, position, _ ->
-            // Make sure we don't try to access an out-of-bounds item
-            if (position < destinationLocationSuggestions.size) {
-                val selectedLocation = destinationLocationSuggestions[position]
-                destinationLocation = Pair(selectedLocation.lat, selectedLocation.lon)
-                destinationCoordinatesText.text = "Coordinates: ${selectedLocation.lat}, ${selectedLocation.lon}"
-                updateStartNavigationButton()
-            }
-        }
-    }
 
     private fun setupButtons() {
         // Use current location button
@@ -279,6 +287,32 @@ class NavigationActivity : AppCompatActivity() {
         )
     }
 
+    private fun setupDestinationSpinner() {
+        val adapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            fixedDestinations.map { it.name }
+        ).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+
+        destinationSpinner.adapter = adapter
+        destinationSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val selected = fixedDestinations[position]
+                destinationLocation = Pair(selected.lat, selected.lon)
+                destinationCoordinatesText.text = "Destination: ${selected.name}\n(${selected.lat}, ${selected.lon})"
+                updateStartNavigationButton()
+                Log.d(TAG, "Selected destination: ${selected.name} (${selected.lat}, ${selected.lon})")
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                destinationLocation = null
+                updateStartNavigationButton()
+            }
+        }
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -294,229 +328,31 @@ class NavigationActivity : AppCompatActivity() {
         }
     }
 
+
+    // Modified getCurrentLocation - auto-sets source
     private fun getCurrentLocation() {
         if (checkLocationPermission()) {
             fusedLocationClient.lastLocation
                 .addOnSuccessListener { location: Location? ->
-                    if (location != null) {
-                        sourceLocation = Pair(location.latitude, location.longitude)
-                        sourceCoordinatesText.text = "Coordinates: ${location.latitude}, ${location.longitude}"
-
-                        // Get address from coordinates for display
-                        reverseGeocode(location.latitude, location.longitude) { address ->
-                            sourceLocationInput.setText(address)
-                            updateStartNavigationButton()
-                        }
-                    } else {
-                        Toast.makeText(this, "Unable to get current location", LENGTH_SHORT).show()
+                    location?.let {
+                        sourceLocation = Pair(it.latitude, it.longitude)
+                        sourceCoordinatesText.text = "Current Location: ${it.latitude}, ${it.longitude}"
+                        updateStartNavigationButton()
+                        Log.d(TAG, "Updated current location: ${it.latitude}, ${it.longitude}")
+                    } ?: run {
+                        Toast.makeText(this, "Couldn't get current location", Toast.LENGTH_SHORT).show()
                     }
                 }
                 .addOnFailureListener { e ->
-                    Toast.makeText(this, "Location error: ${e.message}", LENGTH_SHORT).show()
+                    Toast.makeText(this, "Location error: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
         }
     }
 
-    private fun searchLocation(query: String, isSource: Boolean, adapter: ArrayAdapter<String>) {
-        thread {
-            try {
-                val encodedQuery = URLEncoder.encode(query, "UTF-8")
-
-                // Add location bias - use current location if available, or a default location for Pakistan
-                val viewboxParam = if (sourceLocation != null) {
-                    val lat = sourceLocation!!.first
-                    val lon = sourceLocation!!.second
-                    // Create a viewbox around the current location (roughly 20km square)
-                    val delta = 0.2 // Approximately 20km depending on latitude
-                    "&viewbox=${lon-delta},${lat-delta},${lon+delta},${lat+delta}&bounded=1"
-                } else {
-                    // Default viewbox centered on Pakistan (approximate center coordinates)
-                    // These coordinates cover most of Pakistan
-                    "&viewbox=60.872,23.6345,77.8046,37.0841&bounded=1"
-                }
-
-                // Add country code for Pakistan
-                val countryParam = "&countrycodes=pk"
-
-                // Add language preference for Urdu and English
-                val languageParam = "&accept-language=ur,en"
-
-                val urlString = "$NOMINATIM_API_URL?q=$encodedQuery$viewboxParam$countryParam$languageParam&format=json&limit=5"
-                val url = URL(urlString)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.setRequestProperty("User-Agent", "YoloV8TFLite Navigation App")
-                connection.connectTimeout = 5000
-
-                val responseCode = connection.responseCode
-                if (responseCode == HttpURLConnection.HTTP_OK) {
-                    val reader = BufferedReader(InputStreamReader(connection.inputStream))
-                    val response = StringBuilder()
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
-                        response.append(line)
-                    }
-                    reader.close()
-
-                    // Parse JSON response
-                    val jsonArray = JSONArray(response.toString())
-                    val suggestions = ArrayList<String>()
-
-                    // Clear appropriate list
-                    if (isSource) {
-                        sourceLocationSuggestions.clear()
-                    } else {
-                        destinationLocationSuggestions.clear()
-                    }
-
-                    for (i in 0 until jsonArray.length()) {
-                        val item = jsonArray.getJSONObject(i)
-                        val name = item.getString("display_name")
-                        val lat = item.getDouble("lat")
-                        val lon = item.getDouble("lon")
-
-                        suggestions.add(name)
-
-                        // Add to appropriate list
-                        if (isSource) {
-                            sourceLocationSuggestions.add(LocationSuggestion(name, lat, lon))
-                        } else {
-                            destinationLocationSuggestions.add(LocationSuggestion(name, lat, lon))
-                        }
-                    }
-
-                    // Debug log
-                    Log.d(TAG, "Found ${suggestions.size} suggestions for ${if (isSource) "source" else "destination"}")
-
-                    // Update UI on main thread
-                    runOnUiThread {
-                        adapter.clear()
-                        adapter.addAll(suggestions)
-                        adapter.notifyDataSetChanged()
-
-                        // Force dropdown to show
-                        if (isSource) {
-                            if (suggestions.isNotEmpty()) {
-                                sourceLocationInput.showDropDown()
-                            }
-                        } else {
-                            if (suggestions.isNotEmpty()) {
-                                destinationLocationInput.showDropDown()
-                            }
-                        }
-                    }
-                }
-                connection.disconnect()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error searching for location: ${e.message}", e)
-                runOnUiThread {
-                    Toast.makeText(this, "Location search error: ${e.message}", LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-    // Add this to your setupButtons() function
 
 
-    private fun showManualCoordinateDialog() {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("Enter Coordinates")
 
-        // Set up the input layout
-        val layout = LinearLayout(this)
-        layout.orientation = LinearLayout.VERTICAL
-        layout.setPadding(20, 10, 20, 10)
 
-        val latitudeLabel = TextView(this)
-        latitudeLabel.text = "Latitude:"
-        layout.addView(latitudeLabel)
-
-        val latitudeInput = EditText(this)
-        latitudeInput.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
-        layout.addView(latitudeInput)
-
-        val longitudeLabel = TextView(this)
-        longitudeLabel.text = "Longitude:"
-        longitudeLabel.setPadding(0, 15, 0, 0)
-        layout.addView(longitudeLabel)
-
-        val longitudeInput = EditText(this)
-        longitudeInput.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
-        layout.addView(longitudeInput)
-
-        val nameLabel = TextView(this)
-        nameLabel.text = "Location Name (optional):"
-        nameLabel.setPadding(0, 15, 0, 0)
-        layout.addView(nameLabel)
-
-        val nameInput = EditText(this)
-        layout.addView(nameInput)
-
-        builder.setView(layout)
-
-        builder.setPositiveButton("Set") { dialog, which ->
-            try {
-                val lat = latitudeInput.text.toString().toDouble()
-                val lon = longitudeInput.text.toString().toDouble()
-                val name = if (nameInput.text.isNotEmpty()) nameInput.text.toString() else "Custom Location"
-
-                // Set the destination
-                destinationLocation = Pair(lat, lon)
-                destinationLocationInput.setText(name)
-                destinationCoordinatesText.text = "Coordinates: $lat, $lon"
-                updateStartNavigationButton()
-
-                Toast.makeText(this, "Destination set manually", Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                Toast.makeText(this, "Invalid coordinates", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        builder.setNegativeButton("Cancel") { dialog, which ->
-            dialog.cancel()
-        }
-
-        builder.show()
-    }
-
-    private fun reverseGeocode(lat: Double, lon: Double, callback: (String) -> Unit) {
-        thread {
-            try {
-                val urlString = "$NOMINATIM_API_URL?lat=$lat&lon=$lon&format=json&limit=1"
-                val url = URL(urlString)
-                val connection = url.openConnection() as HttpURLConnection
-                connection.setRequestProperty("User-Agent", "YoloV8TFLite Navigation App")
-
-                val responseCode = connection.responseCode
-                if (responseCode == HttpURLConnection.HTTP_OK) {
-                    val reader = BufferedReader(InputStreamReader(connection.inputStream))
-                    val response = StringBuilder()
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
-                        response.append(line)
-                    }
-                    reader.close()
-
-                    // Parse JSON response
-                    val jsonArray = JSONArray(response.toString())
-                    if (jsonArray.length() > 0) {
-                        val item = jsonArray.getJSONObject(0)
-                        val address = item.getString("display_name")
-
-                        // Call callback on main thread
-                        runOnUiThread {
-                            callback(address)
-                        }
-                    }
-                }
-                connection.disconnect()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error reverse geocoding: ${e.message}")
-                runOnUiThread {
-                    callback("Current Location")
-                }
-            }
-        }
-    }
 
     private fun updateStartNavigationButton() {
         startNavigationButton.isEnabled = sourceLocation != null && destinationLocation != null && connected
@@ -527,15 +363,29 @@ class NavigationActivity : AppCompatActivity() {
         val destination = destinationLocation
 
         if (source == null || destination == null) {
-            Toast.makeText(this, "Source and destination locations must be set", LENGTH_SHORT).show()
+            Toast.makeText(this, "Location not set", LENGTH_SHORT).show()
             return
         }
 
+        // Debug logs
+        Log.d(TAG, "Source Location: ${source.first}, ${source.second}")
+        Log.d(TAG, "Destination Location: ${destination.first}, ${destination.second}")
+
+        // Get the selected destination name from spinner
+        val selectedIndex = destinationSpinner.selectedItemPosition
+        val destName = if (selectedIndex >= 0) {
+            fixedDestinations[selectedIndex].name
+        } else {
+            "Selected Destination"
+        }
+
         navigateToLocation(
-            source.first, source.second,
-            destination.first, destination.second,
-            sourceLocationInput.text.toString(),
-            destinationLocationInput.text.toString()
+            source.first,      // Current location lat
+            source.second,     // Current location lon
+            destination.first, // Selected destination lat
+            destination.second,// Selected destination lon
+            "Current Location", // Source name
+            destName           // Destination name
         )
     }
 
@@ -721,55 +571,58 @@ class NavigationActivity : AppCompatActivity() {
         versionView.visibility = View.VISIBLE
     }
 
-    // Function to navigate to a location using the correct API
-// Function to navigate to a location using the correct API
+
     fun navigateToLocation(
-        sourceLat: Double, sourceLon: Double,
-        destLat: Double, destLon: Double,
-        sourceName: String, destName: String
+        sourceLat: Double,
+        sourceLon: Double,
+        destLat: Double,
+        destLon: Double,
+        sourceName: String,
+        destName: String
     ) {
         if (!connected || mIOsmAndAidlInterface == null) {
-            Toast.makeText(this, "Not connected to OsmAnd", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Not connected to OsmAnd", LENGTH_SHORT).show()
             return
         }
 
+        // Log the inputs to *this* function to be absolutely sure
+        Log.d(TAG, "navigateToLocation called with: source=($sourceLat, $sourceLon) '$sourceName', dest=($destLat, $destLon) '$destName'")
+
         try {
-            // Create intent to launch OsmAnd directly if needed
-            val uri = "osmand.navigation:q=${destLat},${destLon}&name=$destName&profile=$selectedProfile&start_lat=${sourceLat}&start_lon=${sourceLon}&start_name=$sourceName&force=true"
-            val intent = Intent(Intent.ACTION_VIEW)
-            intent.data = android.net.Uri.parse(uri)
-            intent.`package` = osmandPackage
-
-            // First try with correct parameter order
+//            val searchParams = NavigateSearchParams(
+//                destName,        // Target name
+//                destLat,         // Target latitude
+//                destLon,        // Target longitude
+//                sourceName,     // Start name
+//                sourceLat,      // Start latitude
+//                sourceLon,     // Start longitude
+//                selectedProfile, // Navigation profile
+//                true,          // Force
+//                true          // Navigate
+//            )
+            // Despite logs showing correct source/destination variables before this call,
+            // OsmAnd seems to be interpreting the start/target parameters in reverse.
+            // We explicitly swap them here when creating NavigateSearchParams to correct this.
+            // We pass SOURCE data to TARGET slots and DESTINATION data to START slots.
             val searchParams = NavigateSearchParams(
-                destName,                  // Target name
-                destLat,                   // Target latitude
-                destLon,                   // Target longitude
-                sourceName,                // Start name
-                sourceLat,                 // Start latitude (FIXED - was sourceLon)
-                sourceLon,                 // Start longitude (FIXED - was sourceLat)
-                selectedProfile,           // Navigation profile (car, bicycle, etc.)
-                true,                      // Force
-                true                       // Navigate
+                // Parameters are: targetName, targetLat, targetLon, startName, startLat, startLon, ...
+                sourceName,     // Use the INTENDED source name as the TARGET name
+                sourceLat,      // Use the INTENDED source latitude as the TARGET latitude
+                sourceLon,     // Use the INTENDED source longitude as the TARGET longitude
+                destName,       // Use the INTENDED destination name as the START name
+                destLat,        // Use the INTENDED destination latitude as the START latitude
+                destLon,       // Use the INTENDED destination longitude as the START longitude
+                selectedProfile, // Navigation profile remains the same
+                true,          // Force
+                true           // Navigate
             )
-
-            // Try the AIDL method first
             val success = mIOsmAndAidlInterface?.navigateSearch(searchParams) ?: false
 
             if (success) {
-                Toast.makeText(this, "Navigation started via AIDL", LENGTH_SHORT).show()
+                Toast.makeText(this, "Navigation started", LENGTH_SHORT).show()
             } else {
-                // If AIDL fails, fall back to intent
-                try {
-                    Log.d(TAG, "AIDL method failed, trying intent: $uri")
-                    startActivity(intent)
-                    Toast.makeText(this, "Navigation started via Intent", LENGTH_SHORT).show()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to start navigation via intent", e)
-                    Toast.makeText(this, "Navigation error: ${e.message}", LENGTH_SHORT).show()
-                }
+                Toast.makeText(this, "Failed to start navigation", LENGTH_SHORT).show()
             }
-
         } catch (e: Exception) {
             Log.e(TAG, "Error starting navigation", e)
             Toast.makeText(this, "Navigation error: ${e.message}", LENGTH_SHORT).show()
