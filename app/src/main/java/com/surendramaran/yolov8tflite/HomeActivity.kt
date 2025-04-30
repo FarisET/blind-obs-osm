@@ -53,7 +53,7 @@ class HomeActivity : AppCompatActivity() {
         }
 
         binding.cardNavigation.setOnClickListener {
-            startActivity(Intent(this, NavigationActivity::class.java))
+            startActivity(Intent(this, NavigationIntentActivity::class.java))
         }
     }
 
