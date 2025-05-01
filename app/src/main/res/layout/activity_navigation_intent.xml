@@ -69,5 +69,43 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/selectedDestinationText" />
 
+    <!-- Add a LinearLayout for the control buttons -->
+    <LinearLayout
+        android:id="@+id/controlButtonsLayout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/startNavigationButton">
+
+        <Button
+            android:id="@+id/stopNavigationButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:enabled="false"
+            android:text="Stop" />
+
+<!--        <Button-->
+<!--            android:id="@+id/pauseNavigationButton"-->
+<!--            android:layout_width="0dp"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:layout_weight="1"-->
+<!--            android:layout_marginEnd="8dp"-->
+<!--            android:enabled="false"-->
+<!--            android:text="Pause" />-->
+
+<!--        <Button-->
+<!--            android:id="@+id/resumeNavigationButton"-->
+<!--            android:layout_width="0dp"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:layout_weight="1"-->
+<!--            android:enabled="false"-->
+<!--            android:text="Resume" />-->
+
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -18,6 +18,7 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
+
     <queries>
         <package android:name="net.osmand" />
         <package android:name="net.osmand.plus" />
@@ -39,31 +40,25 @@
 
         <!-- Make HomeActivity the launcher activity -->
         <activity
-            android:name=".HomeActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-
-        <activity
             android:name=".NavigationIntentActivity"
-            android:exported="true"> <!-- Set exported=true if you want to launch it directly -->
+            android:exported="true"
+            android:launchMode="singleTop"> <!-- singleTop might be useful -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".NavigationActivity"
-            android:label="Navigation" />
-
-        <!-- Remove launcher intent filter from MainActivity -->
+        <!-- Live Camera Activity (Keep declaration) -->
         <activity
             android:name=".LiveCameraActivity"
-            android:exported="true" />
+            android:exported="false" /> <!-- Typically not exported directly -->
+
+        <!-- Home Activity (No longer launcher) -->
+        <activity
+            android:name=".HomeActivity"
+            android:exported="false" />
+
 
         <activity android:name=".VideoSimulationActivity" />
 
@@ -79,6 +74,18 @@
                 <action android:name="net.osmand" />
             </intent-filter>
         </receiver>
+
+        <!-- Add FileProvider if needed by OsmAndHelper or other parts -->
+<!--        <provider-->
+<!--            android:name="androidx.core.content.FileProvider"-->
+<!--            android:authorities="${applicationId}.fileprovider"-->
+<!--            android:exported="false"-->
+<!--            android:grantUriPermissions="true">-->
+<!--            <meta-data-->
+<!--                android:name="android.support.FILE_PROVIDER_PATHS"-->
+<!--                android:resource="@xml/filepaths" />-->
+<!--        </provider>-->
+
 
     </application>
 </manifest>
