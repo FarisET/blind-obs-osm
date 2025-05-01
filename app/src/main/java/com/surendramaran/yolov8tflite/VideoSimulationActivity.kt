@@ -218,33 +218,49 @@ class VideoSimulationActivity : AppCompatActivity(), Detector.DetectorListener {
     // Update the onDetect function
     override fun onDetect(boundingBoxes: List<BoundingBox>, inferenceTime: Long) {
         runOnUiThread {
-            cleanupExpiredHistory()
+            if (isFinishing) return@runOnUiThread
 
-            // Centralized class name handling
-            val processedBoxes = boundingBoxes.map { box ->
-                box.copy(clsName = DetectionUtils.getDisplayClassName(box.clsName))
-            }
+            binding.inferenceTime?.text = "${inferenceTime}ms"
+            DetectionUtils.cleanupExpiredHistory(alertHistory) // Use helper
 
-            val prioritized = DetectionUtils.filterAndPrioritize(processedBoxes)
-                .take(1)
-                .filter { box ->
-                    DetectionUtils.shouldAlert(alertHistory, box).also {
-                        if (it) alertHistory[DetectionUtils.generateHistoryKey(box)] = System.currentTimeMillis()
-                    }
-                }
-
-            binding.overlay.setResults(prioritized)
-            binding.overlay.invalidate()
-            binding.inferenceTime.text = "${inferenceTime}ms"
-
-            prioritized.map { box ->
-                DetectionUtils.generateAlertMessage(box)
-            }.forEach { message ->
-                if (!ttsQueue.contains(message)) {
-                    ttsQueue.add(message)
+            // 1. Map to display names & Filter out ignored classes (null display name)
+            val displayBoxes = boundingBoxes.mapNotNull { box ->
+                DetectionUtils.getDisplayClassName(box.clsName)?.let { displayName ->
+                    box.copy(clsName = displayName)
                 }
             }
 
+            // 2. Filter further by area threshold & Prioritize
+            val prioritizedBoxes = DetectionUtils.filterAndPrioritize(displayBoxes)
+
+            // 3. Select top N for display
+            val boxesForDisplay = prioritizedBoxes.take(DetectionUtils.MAX_RESULTS_TO_DISPLAY)
+
+            // 4. Update Overlay with boxes for display
+            binding.overlay?.apply {
+                setResults(boxesForDisplay)
+                invalidate()
+            }
+
+            // 5. Select the single most important box to potentially speak
+            val boxToSpeak = prioritizedBoxes.firstOrNull() // Get the highest priority one
+
+            // 6. Check if this specific box should be alerted (history cooldown)
+            if (boxToSpeak != null && DetectionUtils.shouldAlert(alertHistory, boxToSpeak)) {
+                val message = DetectionUtils.generateAlertMessage(boxToSpeak)
+
+                // Add to queue (queue will likely only hold 1 item due to flush/interval)
+                // Check queue content *before* adding to prevent exact duplicate utterances
+                // if (!ttsQueue.contains(message)) { // This check might be too restrictive with timing
+//                Log.d(TAG, "Adding to TTS Queue: $message")
+                ttsQueue.add(message)
+                DetectionUtils.updateAlertHistory(alertHistory, boxToSpeak) // Update history
+                // } else {
+                // Log.v(TAG, "Message already in queue: $message")
+                // }
+            }
+
+            // 7. Attempt to process the queue (will speak if conditions met)
             processNextAlert()
         }
     }

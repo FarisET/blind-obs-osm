@@ -33,37 +33,42 @@ class LiveCameraActivity : AppCompatActivity(),
     TextToSpeech.OnInitListener { // Implement OnInitListener
 
     // Use ViewBinding
-    private lateinit var binding: ActivityMainBinding
-    private val isFrontCamera = false // Keep consistent with original
 
-    // CameraX components
-    private var preview: Preview? = null
-    private var imageAnalyzer: ImageAnalysis? = null
-    private var camera: Camera? = null
-    private var cameraProvider: ProcessCameraProvider? = null
-
-    // Detector
-    private var detector: Detector? = null
-    private lateinit var cameraExecutor: ExecutorService
-
-    // TTS components - Reuse logic from previous attempts
-    private lateinit var tts: TextToSpeech
-    private var ttsInitialized = false
-    private val ttsQueue = LinkedList<String>()
-    private var isTtsSpeaking = false
     private val COOLDOWN_MS = 3000L // Cooldown for TTS messages with same content
     private var lastMessages = mutableSetOf<String>() // Track recently spoken messages by content
 
     // Alert history for spam prevention
-    private val alertHistory = mutableMapOf<String, Long>()
     private val HISTORY_EXPIRATION_MS = 6000L // Cooldown for alerting the *same object* (key)
+
+
+    // Minimum time between any two spoken alerts
+    private val FEEDBACK_DELAY_MS = 2000L
+
+    private lateinit var binding: ActivityMainBinding
+    private val isFrontCamera = false
+
+    private var preview: Preview? = null
+    private var imageAnalyzer: ImageAnalysis? = null
+    private var camera: Camera? = null
+    private var cameraProvider: ProcessCameraProvider? = null
+    private var detector: Detector? = null
+    private lateinit var cameraExecutor: ExecutorService
+
+    // TTS components
+    private lateinit var tts: TextToSpeech
+    private var ttsInitialized = false
+    private val ttsQueue = LinkedList<String>()
+    private var isTtsSpeaking = false
+    private var lastSpokenUtteranceId: String? = null // Track last spoken ID for debugging
+
+    // Alert history & Timing
+    // Use HashMap for alertHistory for clearer type
+    private val alertHistory = HashMap<String, Long>() // Map<Key, Timestamp>
+    private var lastFeedbackTime = 0L // Timestamp of the last successful TTS speak call
 
     // Timer Handler for scan duration
     private val scanHandler = Handler(Looper.getMainLooper())
-    private var scanDuration = -1L // From Intent, -1 means indefinite
-    // Minimum time between any two spoken alerts
-    private var lastFeedbackTime = 0L
-    private val FEEDBACK_DELAY_MS = 2000L
+    private var scanDuration = -1L
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -266,9 +271,28 @@ class LiveCameraActivity : AppCompatActivity(),
     // --- TTS Processing ---
     private val ttsProgressListener = object : UtteranceProgressListener() {
         // ... (Keep existing listener logic from previous version - onDone triggers processNextAlert) ...
-        override fun onStart(utteranceId: String?) {}
-        override fun onDone(utteranceId: String?) { runOnUiThread { isTtsSpeaking = false; processNextAlert() } }
-        override fun onError(utteranceId: String?, errorCode: Int) { runOnUiThread { Log.e(TAG, "TTS Error ($errorCode) for $utteranceId"); isTtsSpeaking = false; processNextAlert() } }
+        override fun onStart(utteranceId: String?) {
+            Log.d(TAG_TTS, "TTS Start: $utteranceId")
+            isTtsSpeaking = true // Mark as speaking when starting
+        }
+
+        override fun onDone(utteranceId: String?) {
+            Log.d(TAG_TTS, "TTS Done: $utteranceId")
+            // Check if it's the utterance we were tracking
+            if (utteranceId == lastSpokenUtteranceId) {
+                isTtsSpeaking = false
+            }
+            // Always try to process next in case queue has items
+            runOnUiThread { processNextAlert() }
+        }
+
+        override fun onError(utteranceId: String?, errorCode: Int) {
+            Log.e(TAG_TTS, "TTS Error ($errorCode) for $utteranceId")
+            if (utteranceId == lastSpokenUtteranceId) {
+                isTtsSpeaking = false
+            }
+            runOnUiThread { processNextAlert() } // Try next even on error
+        }
         @Deprecated("Deprecated in Java") override fun onError(utteranceId: String?) { onError(utteranceId, -1) }
     }
 
@@ -331,67 +355,60 @@ class LiveCameraActivity : AppCompatActivity(),
         alertHistory[key] = System.currentTimeMillis()
     }
 
-    // *** RESTORED onDetect Logic from Original (with safe calls) ***
+    // --- Detection Result Handling (Detector.DetectorListener) ---
     override fun onDetect(boundingBoxes: List<BoundingBox>, inferenceTime: Long) {
         runOnUiThread {
-            if (isFinishing) return@runOnUiThread // Check if activity is finishing
+            if (isFinishing) return@runOnUiThread
 
-            binding.inferenceTime?.text = "${inferenceTime}ms" // Update UI safely
-            cleanupExpiredHistory() // Manage alert history
+            binding.inferenceTime?.text = "${inferenceTime}ms"
+            DetectionUtils.cleanupExpiredHistory(alertHistory) // Use helper
 
-            // 1. Map class names using DetectionUtils (from original)
-            val filteredBoxes = boundingBoxes.mapNotNull { box -> // Use mapNotNull
+            // 1. Map to display names & Filter out ignored classes (null display name)
+            val displayBoxes = boundingBoxes.mapNotNull { box ->
                 DetectionUtils.getDisplayClassName(box.clsName)?.let { displayName ->
-                    box.copy(clsName = displayName) // Update name to display name
+                    box.copy(clsName = displayName)
                 }
             }
 
-            // 2. Prioritize using DetectionUtils (from original)
-            val prioritized = DetectionUtils.filterAndPrioritize(filteredBoxes)
-                // *** Ensure MAX_RESULTS_TO_DISPLAY is suitable, maybe start smaller e.g., 1 or 2 for TTS clarity ***
-                .take(1) // Take top N results
-                // 3. Filter based on alert history/cooldown (from original)
-                .filter { shouldAlert(it) }
+            // 2. Filter further by area threshold & Prioritize
+            val prioritizedBoxes = DetectionUtils.filterAndPrioritize(displayBoxes)
 
-            // 4. Update overlay with the *filtered & prioritized* boxes for alerting
-            //    (Original seemed to update with this list)
+            // 3. Select top N for display
+            val boxesForDisplay = prioritizedBoxes.take(DetectionUtils.MAX_RESULTS_TO_DISPLAY)
+
+            // 4. Update Overlay with boxes for display
             binding.overlay?.apply {
-                setResults(prioritized) // Pass the final list intended for alerts
+                setResults(boxesForDisplay)
                 invalidate()
             }
 
-            // 5. Queue TTS alerts for the *prioritized* boxes that passed shouldAlert
-            prioritized.forEach { box ->
-                val message = generateAlertMessage(box)
+            // 5. Select the single most important box to potentially speak
+            val boxToSpeak = prioritizedBoxes.firstOrNull() // Get the highest priority one
 
-                // enforce a minimum delay between any two alerts
-                val now = System.currentTimeMillis()
-                if (now - lastFeedbackTime < FEEDBACK_DELAY_MS) {
-                    Log.v(TAG, "Waiting ${FEEDBACK_DELAY_MS - (now - lastFeedbackTime)}ms before next alert")
-                    return@forEach
-                }
+            // 6. Check if this specific box should be alerted (history cooldown)
+            if (boxToSpeak != null && DetectionUtils.shouldAlert(alertHistory, boxToSpeak)) {
+                val message = DetectionUtils.generateAlertMessage(boxToSpeak)
 
-                // avoid enqueuing exact duplicates while one is still pending or just spoken
-                if (!ttsQueue.contains(message) && !lastMessages.contains(message)) {
-                    ttsQueue.add(message)
-                    lastFeedbackTime = now                // reset the cooldown clock
-                    Log.v(TAG, "Queued alert: $message")
-                    updateAlertHistory(box)
-                } else {
-                    Log.v(TAG, "Skipping duplicate alert: $message")
-                    }
-                }
-            processNextAlert() // Attempt to speak from the queue
+                // Add to queue (queue will likely only hold 1 item due to flush/interval)
+                // Check queue content *before* adding to prevent exact duplicate utterances
+                // if (!ttsQueue.contains(message)) { // This check might be too restrictive with timing
+                Log.d(TAG, "Adding to TTS Queue: $message")
+                ttsQueue.add(message)
+                DetectionUtils.updateAlertHistory(alertHistory, boxToSpeak) // Update history
+                // } else {
+                // Log.v(TAG, "Message already in queue: $message")
+                // }
+            }
+
+            // 7. Attempt to process the queue (will speak if conditions met)
+            processNextAlert()
         }
     }
 
 
     override fun onEmptyDetect() {
         runOnUiThread {
-            if (!isFinishing) {
-                binding.overlay?.clear()
-                binding.overlay?.invalidate()
-            }
+            if (!isFinishing) { binding.overlay?.clear(); binding.overlay?.invalidate() }
         }
     }
 
@@ -475,8 +492,7 @@ class LiveCameraActivity : AppCompatActivity(),
     // --- Companion Object ---
     companion object {
         private const val TAG = "LiveCameraActivity"
-        // Ensure these paths are correct in your assets folde
-        // Permissions required by this activity
+        private const val TAG_TTS = "LiveCameraTTS"
         private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
     }
 }
