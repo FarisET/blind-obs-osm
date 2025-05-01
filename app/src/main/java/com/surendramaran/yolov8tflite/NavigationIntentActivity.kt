@@ -90,8 +90,11 @@ class NavigationIntentActivity : AppCompatActivity(),
     private val fixedDestinations = listOf(
         FixedDestination("Mian Abdullah Library", "Near Adamjee Academic Block", 24.94086575, 67.1150593333021),
         FixedDestination("IBA Soccer Field", "Near NBP Building", 24.94172, 67.11383),
-        FixedDestination("Mubarak Masjid","Q2WV+66J, DHA Phase 5", 24.79540, 67.04332)
+        FixedDestination("Mubarak Masjid","Q2WV+66J, DHA Phase 5", 24.79540, 67.04332),
+        FixedDestination("Falah Masjid","V3C2+GMR, Al-Falah Rd, Block 2 P.E.C.H.S.", 24.87137, 67.05169)
+
     )
+
     private var selectedDestination: FixedDestination? = null
     private var temporaryMatchedIndex: Int = -1
 
