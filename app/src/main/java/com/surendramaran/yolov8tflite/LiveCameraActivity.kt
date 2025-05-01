@@ -61,6 +61,10 @@ class LiveCameraActivity : AppCompatActivity(),
     // Timer Handler for scan duration
     private val scanHandler = Handler(Looper.getMainLooper())
     private var scanDuration = -1L // From Intent, -1 means indefinite
+    // Minimum time between any two spoken alerts
+    private var lastFeedbackTime = 0L
+    private val FEEDBACK_DELAY_MS = 2000L
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,7 +123,7 @@ class LiveCameraActivity : AppCompatActivity(),
                 ttsInitialized = true
                 Log.i(TAG, "TTS Initialized.")
                 tts.setOnUtteranceProgressListener(ttsProgressListener)
-                speakOnInit("Obstacle detection started.") // Announce start
+//                speakOnInit("Obstacle detection started.") // Announce start
             }
         } else {
             Log.e(TAG, "TTS Initialization failed (Status: $status).")
@@ -358,20 +362,25 @@ class LiveCameraActivity : AppCompatActivity(),
 
             // 5. Queue TTS alerts for the *prioritized* boxes that passed shouldAlert
             prioritized.forEach { box ->
-                val message = generateAlertMessage(box) // Generate message using original logic
-                // Add to queue only if not recently *spoken* (lastMessages check)
-                // The shouldAlert already handles the history/cooldown for *generating* the alert
-                if (!lastMessages.contains(message)) { // Use lastMessages for TTS cooldown
-                    // Only add if not already in the queue to avoid duplicates while processing
-                    if (!ttsQueue.contains(message)) {
-                        ttsQueue.add(message)
-                        Log.v(TAG, "Queued alert: $message")
-                    }
-                    updateAlertHistory(box) // Mark as alerted (updates timestamp)
-                } else {
-                    Log.v(TAG,"TTS Cooldown active for: $message")
+                val message = generateAlertMessage(box)
+
+                // enforce a minimum delay between any two alerts
+                val now = System.currentTimeMillis()
+                if (now - lastFeedbackTime < FEEDBACK_DELAY_MS) {
+                    Log.v(TAG, "Waiting ${FEEDBACK_DELAY_MS - (now - lastFeedbackTime)}ms before next alert")
+                    return@forEach
                 }
-            }
+
+                // avoid enqueuing exact duplicates while one is still pending or just spoken
+                if (!ttsQueue.contains(message) && !lastMessages.contains(message)) {
+                    ttsQueue.add(message)
+                    lastFeedbackTime = now                // reset the cooldown clock
+                    Log.v(TAG, "Queued alert: $message")
+                    updateAlertHistory(box)
+                } else {
+                    Log.v(TAG, "Skipping duplicate alert: $message")
+                    }
+                }
             processNextAlert() // Attempt to speak from the queue
         }
     }

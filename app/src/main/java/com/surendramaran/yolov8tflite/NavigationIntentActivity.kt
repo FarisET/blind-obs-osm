@@ -8,6 +8,7 @@ import android.location.Location
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
@@ -48,6 +49,7 @@ class NavigationIntentActivity : AppCompatActivity(),
         private const val ALL_PERMISSIONS_REQUEST_CODE = 1005
         private const val REQUEST_OSMAND_API = 1003
         private const val SCAN_DURATION_MS = 5000L
+        private const val DOUBLE_PRESS_DELAY_MS = 500
 
         // Utterance IDs
         private const val UTT_INITIAL_PROMPT = "UTT_INITIAL_PROMPT"
@@ -66,7 +68,10 @@ class NavigationIntentActivity : AppCompatActivity(),
         private const val STATE_VOICE_STATE = "STATE_VOICE_STATE"
         private const val STATE_SELECTED_DESTINATION = "STATE_SELECTED_DESTINATION"
         private const val STATE_TEMP_MATCH_INDEX = "STATE_TEMP_MATCH_INDEX"
-        private const val STATE_PERMISSIONS_GRANTED = "STATE_PERMISSIONS_GRANTED" // Also save permission status
+        private const val STATE_PERMISSIONS_GRANTED = "STATE_PERMISSIONS_GRANTED"
+        private const val UTT_STOP_MSG_COMPLETE = "UTT_STOP_MSG_COMPLETE"
+//        private const val UTT_RETRY_PROMPT = "UTT_RETRY_PROMPT"
+        private const val UTT_RETRY_INSTRUCTION = "UTT_RETRY_INSTRUCTION"
     }
 
     // --- UI Elements ---
@@ -117,6 +122,8 @@ class NavigationIntentActivity : AppCompatActivity(),
 
     private var currentVoiceState = VoiceState.AWAITING_PERMISSIONS
     private var requiredPermissionsGranted = false
+
+    private var lastVolumeDownPressTime: Long = 0
 
     // --- Activity Result Launchers ---
     private val speechResultLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -304,17 +311,26 @@ class NavigationIntentActivity : AppCompatActivity(),
                             startListening(VoiceState.AWAITING_CONFIRMATION)
                         }
                     }
-                    UTT_STOPPING_NAV -> {
-                        if (currentVoiceState == VoiceState.IDLE) { // Ensure state was correctly set to IDLE by stopAction
-                            Log.i(TAG,"Stop TTS done, prompting for next destination.")
-                            promptInitialDestination() // Ask "Where to?" again
-                        } else {
-                            Log.w(
-                                TAG,
-                                "Stop TTS done, but state wasn't IDLE ($currentVoiceState), not re-prompting."
+                    UTT_STOPPING_NAV -> { if (currentVoiceState == VoiceState.IDLE) { speak(UTT_BACK_BUTTON_PROMPT, "Please press the back button.") } } // Speak next part
+                    UTT_BACK_BUTTON_PROMPT -> { if (currentVoiceState == VoiceState.IDLE) { speak(UTT_STOP_MSG_COMPLETE, "Then, double press Volume Down for a new trip.") } } // Speak final part
+                    UTT_BACK_BUTTON_PROMPT -> { // After "Please press back..."
+                        // Check state, should still be IDLE
+                        if (currentVoiceState == VoiceState.IDLE) {
+                            speak(
+                                UTT_STOP_MSG_COMPLETE,
+                                "Then, double press Volume Down to start a new trip."
                             )
                         }
-                        }
+                    }
+                    UTT_STOP_MSG_COMPLETE -> { // After the final part of stop sequence
+                        Log.d(TAG, "Finished speaking stop message sequence.")
+                        // No automatic action needed. User needs to press back & double-press Vol Down.
+                    }
+                    // --- End Chain Stop Messages ---
+
+                    // After speaking retry instruction, wait for user trigger
+//
+                    UTT_RETRY_INSTRUCTION -> { Log.d(TAG, "Retry instruction finished.") }
                 }
             }
         }
@@ -326,13 +342,11 @@ class NavigationIntentActivity : AppCompatActivity(),
     }
 
     private fun handleTtsError(utteranceId: String?) {
-        // ... (Keep existing TTS error handling) ...
         Log.e(TAG, "Handling TTS error for utterance: $utteranceId")
         when (utteranceId) {
             UTT_INITIAL_PROMPT, UTT_ASK_AGAIN, UTT_CONFIRM_DEST -> {
-                currentVoiceState = VoiceState.IDLE
-                updateStatusText()
-                Toast.makeText(this, "Audio prompt error.", Toast.LENGTH_SHORT).show()
+                if (currentVoiceState != VoiceState.NAVIGATION_ACTIVE && currentVoiceState != VoiceState.SCANNING_ACTIVE) { currentVoiceState = VoiceState.IDLE }
+                updateStatusText(); Toast.makeText(this, "Audio prompt error.", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -349,27 +363,23 @@ class NavigationIntentActivity : AppCompatActivity(),
 
     private fun handleSpeechResult(result: androidx.activity.result.ActivityResult) {
         Log.d(TAG, "Handling Speech Result Code: ${result.resultCode}, Current State: $currentVoiceState")
-        isListening = false // Mark listening as finished regardless of outcome
+        isListening = false // Mark listening finished
 
         if (result.resultCode == RESULT_OK && result.data != null) {
             val speechResult: ArrayList<String>? = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
             if (!speechResult.isNullOrEmpty()) {
                 val recognizedText = speechResult[0].lowercase(Locale.getDefault()).trim()
                 Log.i(TAG, "Recognized: '$recognizedText'")
-                processVoiceInput(recognizedText) // Process the result
+                processVoiceInput(recognizedText)
             } else {
                 Log.w(TAG, "Speech returned empty results.")
-                handleSpeechError("No speech detected.")
+                // Use the specific error handler for speech failures
+                handleSpeechRecognitionError("No speech detected")
             }
         } else {
             Log.w(TAG, "Speech recognition failed, cancelled, or no result (Result Code: ${result.resultCode}).")
-            // Don't necessarily speak an error if user cancelled, just reset state if appropriate
-            if (currentVoiceState == VoiceState.LISTENING_FOR_DESTINATION || currentVoiceState == VoiceState.AWAITING_CONFIRMATION) {
-                currentVoiceState = VoiceState.IDLE // Go back to idle if listening was cancelled/failed
-                updateStatusText()
-                // Maybe prompt again? Or wait for manual trigger? For now, wait.
-            }
-            // If listening for NAV commands failed, stay in NAV state but stop listening
+            // Use the specific error handler for speech failures
+            handleSpeechRecognitionError("Listening failed or was cancelled")
         }
     }
 
@@ -393,15 +403,50 @@ class NavigationIntentActivity : AppCompatActivity(),
         }
     }
 
+    // *** MODIFIED Speech Error Handling ***
     private fun handleSpeechError(errorMessage: String) {
-        // ... (Keep existing handleSpeechError logic - speaks error, resets state appropriately) ...
-        speak(UTT_SPEECH_ERROR, "Sorry, $errorMessage")
-        // Only reset to IDLE if we were in a pre-navigation state
+        Log.e(TAG, "handleSpeechError: $errorMessage. Current State was: $currentVoiceState")
+
+        // Construct the user-facing message with retry instructions
+        val fullErrorMessage = "Sorry, $errorMessage. Please double press the Volume Down button to try again."
+
+        // Speak the error and the instruction
+        Log.e(TAG, "Error launching speech recognizer, UTT_RETRY_INSTRUCTION")
+        speak(UTT_RETRY_INSTRUCTION, fullErrorMessage) // Using UTT_RETRY_PROMPT is fine
+
+        // Reset state to IDLE ONLY if the error occurred during a pre-navigation phase
+        // This allows the Volume Down double-press trigger to work.
+        // Do NOT reset if navigation was active (though listening isn't expected then anyway).
+        if (currentVoiceState == VoiceState.LISTENING_FOR_DESTINATION ||
+            currentVoiceState == VoiceState.AWAITING_CONFIRMATION ||
+            currentVoiceState == VoiceState.PROMPTING_DESTINATION) // Or if TTS error happened during prompt
+        {
+            Log.i(TAG, "Resetting state to IDLE due to speech error in pre-navigation phase.")
+            currentVoiceState = VoiceState.IDLE
+        } else {
+            Log.w(TAG, "Speech error occurred in state $currentVoiceState, not resetting to IDLE.")
+            // If error occurred during NAV state (unlikely as listening isn't auto),
+            // we might want different handling, but for now, just don't reset to IDLE.
+        }
+
+        isListening = false // Ensure listening flag is always reset on error
+        updateStatusText() // Update UI to reflect IDLE state and prompt
+        updateButtonStates() // Update buttons based on new state
+    }
+
+    private fun handleSpeechRecognitionError(errorContext: String) {
+        Log.e(TAG, "handleSpeechRecognitionError: $errorContext. State was: $currentVoiceState")
+
+        // *** Speak the error and explicit retry instruction ***
+        speak(UTT_RETRY_INSTRUCTION, "Sorry, $errorContext. Please double press the Volume Down button to try specifying a destination again.")
+
+        // Ensure state is reset to IDLE so the double-press trigger works
         if (currentVoiceState != VoiceState.NAVIGATION_ACTIVE && currentVoiceState != VoiceState.SCANNING_ACTIVE) {
             currentVoiceState = VoiceState.IDLE
         }
-        isListening = false
+        isListening = false // Ensure listening flag is reset
         updateStatusText()
+        updateButtonStates()
     }
 
     // --- Voice Input Processing Logic ---
@@ -409,32 +454,15 @@ class NavigationIntentActivity : AppCompatActivity(),
         Log.i(TAG, "Processing voice input: '$text' while in state: $currentVoiceState")
         if (text.isBlank()) { handleSpeechError("No speech detected."); return }
 
-        // --- Check for STOP command first (highest priority) ---
-        if (text.contains("stop navigation")) {
-            if (currentVoiceState == VoiceState.NAVIGATION_ACTIVE || currentVoiceState == VoiceState.SCANNING_ACTIVE) {
-                stopNavigationAction() // This will change state to IDLE and re-prompt
-            } else {
-                speak(UTT_STOPPING_NAV, "Navigation is not active.")
-            }
-            return // Stop command processed
-        }
+
 
         // --- State-Specific Processing ---
         when (currentVoiceState) {
             // Listening for destination OR just returned to IDLE after stop/error
-            VoiceState.LISTENING_FOR_DESTINATION, VoiceState.IDLE -> {
-                // Ignore other commands if waiting for destination
+            VoiceState.LISTENING_FOR_DESTINATION -> { // Note: IDLE state doesn't listen automatically now
                 val matchedIndex = findBestMatch(text)
-                if (matchedIndex != -1) {
-                    temporaryMatchedIndex = matchedIndex
-                    promptForConfirmation() // Moves state to AWAITING_CONFIRMATION
-                } else {
-                    Log.w(TAG, "No destination match found for '$text'")
-                    speak(UTT_NO_MATCH, "Sorry, I couldn't find a match for '$text'. Please try saying the destination name again.")
-                    // Stay IDLE, wait for user to retry (or prompt again via TTS listener if desired)
-                    currentVoiceState = VoiceState.IDLE // Ensure state is IDLE
-                    updateStatusText()
-                }
+                if (matchedIndex != -1) { temporaryMatchedIndex = matchedIndex; promptForConfirmation() }
+                else { Log.w(TAG, "No dest match '$text'"); speak(UTT_NO_MATCH, "No match. Double press Volume Down to try again."); currentVoiceState = VoiceState.IDLE; updateStatusText() } // Guide user
             }
             VoiceState.AWAITING_CONFIRMATION -> {
                 // Process yes/no for confirmation
@@ -575,12 +603,15 @@ class NavigationIntentActivity : AppCompatActivity(),
 
     // --- TTS Speak Helper ---
     private fun speak(utteranceId: String, text: String) {
-        // ... (Keep existing speak logic) ...
         if (ttsInitialized) {
             Log.i(TAG,"TTS Speak ($utteranceId): $text")
-            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+            // Use QUEUE_FLUSH for most prompts to ensure they are spoken immediately.
+            // Use QUEUE_ADD only where needed (like the back button prompt after nav start).
+            val queueMode = if (utteranceId == UTT_BACK_BUTTON_PROMPT || utteranceId == UTT_STOP_MSG_COMPLETE) TextToSpeech.QUEUE_ADD else TextToSpeech.QUEUE_FLUSH
+            tts.speak(text, queueMode, null, utteranceId)
         } else {
             Log.e(TAG, "TTS not initialized, cannot speak: $text")
+            // Consider queuing messages if TTS isn't ready yet? More complex. For now, just log.
         }
     }
 
@@ -599,7 +630,6 @@ class NavigationIntentActivity : AppCompatActivity(),
             return
         }
 
-        speak(UTT_SCAN_STARTING, "Starting obstacle scan.")
         currentVoiceState = VoiceState.SCANNING_ACTIVE
         updateStatusText()
         updateButtonStates() // Visually disable nav buttons during scan
@@ -818,7 +848,7 @@ class NavigationIntentActivity : AppCompatActivity(),
             Handler(Looper.getMainLooper()).postDelayed({
                 if (currentVoiceState == VoiceState.NAVIGATION_ACTIVE && ttsInitialized) {
                     Log.i(TAG, "Speaking back button prompt.")
-                    tts.speak("Navigation guidance running in background. You can press the back button now.", TextToSpeech.QUEUE_ADD, null, UTT_BACK_BUTTON_PROMPT)
+                    tts.speak("You can press the back button now.", TextToSpeech.QUEUE_ADD, null, UTT_BACK_BUTTON_PROMPT)
                 }
             }, 5000L)
         } catch (e: Exception) { /* Error handling, reset state */ currentVoiceState = VoiceState.IDLE }
@@ -827,34 +857,36 @@ class NavigationIntentActivity : AppCompatActivity(),
 
 
     private fun stopNavigationAction() {
-        Log.i(TAG, "Stop Navigation action triggered.")
-        if (osmandPackage != null && (currentVoiceState == VoiceState.NAVIGATION_ACTIVE || currentVoiceState == VoiceState.SCANNING_ACTIVE)) {
+        Log.i(TAG, "Stop Navigation action triggered. Current State: $currentVoiceState")
+        if (osmandPackage == null) { Log.e(TAG,"Cannot stop, OsmAnd missing."); return }
+
+        if (currentVoiceState == VoiceState.NAVIGATION_ACTIVE || currentVoiceState == VoiceState.SCANNING_ACTIVE) {
             try {
-                osmandHelper.stopNavigation() // Send intent via helper
-                // Speak confirmation. The TTS listener will trigger the re-prompt.
-                speak(UTT_STOPPING_NAV, "Stopping navigation.")
+                osmandHelper.stopNavigation() // Send intent
+
                 // --- Reset State Immediately ---
+                val previousState = currentVoiceState
                 currentVoiceState = VoiceState.IDLE
                 selectedDestination = null
                 temporaryMatchedIndex = -1
-                selectedDestinationText.text = "Dest: Speak destination" // Reset UI text
-                updateButtonStates()
-                updateStatusText()
+                runOnUiThread {
+                    selectedDestinationText.text = "Dest: Speak destination"
+                    updateButtonStates()
+                    updateStatusText()
+                }
                 // -----------------------------
+
+                // *** Speak ONLY the first part; rest chained via listener ***
+                speak(UTT_STOPPING_NAV, "Navigation stopped.")
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending stop navigation command", e)
-                speak(UTT_GENERAL_ERROR, "Error sending stop command.")
-                // Attempt to reset state even on error
-                currentVoiceState = VoiceState.IDLE
-                updateButtonStates()
-                updateStatusText()
+                speak(UTT_GENERAL_ERROR, "Error stopping navigation.")
+                currentVoiceState = VoiceState.IDLE // Attempt recovery
+                runOnUiThread { updateButtonStates(); updateStatusText() }
             }
         } else {
-            Log.w(TAG, "Stop ignored: State=$currentVoiceState, OsmAnd=$osmandPackage")
-            // Only speak if user explicitly tried to stop something not active
-            if(currentVoiceState != VoiceState.IDLE){ // Avoid speaking if already idle
-                speak(UTT_STOPPING_NAV, "Navigation is not currently active.")
-            }
+            Log.w(TAG, "Stop ignored: State is $currentVoiceState")
         }
     }
 
@@ -899,31 +931,36 @@ class NavigationIntentActivity : AppCompatActivity(),
     // --- Volume Button Scan Trigger ---
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         when (keyCode) {
-            // Volume Up: Trigger Scan (only during navigation)
             KeyEvent.KEYCODE_VOLUME_UP -> {
-                Log.d(TAG, "Volume Up pressed. Current state: $currentVoiceState")
-                if (currentVoiceState == VoiceState.NAVIGATION_ACTIVE) {
-                    Log.i(TAG, "Volume Up triggered obstacle scan.")
-                    triggerObstacleScan()
-                    return true // Consume the event
-                } else {
-                    Log.d(TAG, "Volume Up ignored, state is not NAVIGATION_ACTIVE.")
-                }
+                if (currentVoiceState == VoiceState.NAVIGATION_ACTIVE) { Log.i(TAG, "Vol Up -> Scan"); triggerObstacleScan(); return true }
+                else { Log.d(TAG, "Vol Up ignored: State=$currentVoiceState") }
             }
-            // Volume Down: Trigger Stop Navigation (during navigation or scan)
             KeyEvent.KEYCODE_VOLUME_DOWN -> {
-                Log.d(TAG, "Volume Down pressed. Current state: $currentVoiceState")
+                val currentTime = SystemClock.uptimeMillis()
+                Log.d(TAG, "Vol Down pressed. State: $currentVoiceState, Time: $currentTime")
+
+                // Stop Action (Single Press during Nav/Scan)
                 if (currentVoiceState == VoiceState.NAVIGATION_ACTIVE || currentVoiceState == VoiceState.SCANNING_ACTIVE) {
-                    Log.i(TAG, "Volume Down triggered stop navigation.")
+                    Log.i(TAG, "Vol Down -> Stop Navigation")
                     stopNavigationAction()
-                    return true // Consume the event
-                } else {
-                    Log.d(TAG, "Volume Down ignored, state is not NAVIGATION_ACTIVE or SCANNING_ACTIVE.")
+                    lastVolumeDownPressTime = 0 // Reset time to prevent immediate double-press trigger after stopping
+                    return true // Consume event
                 }
+                // New Navigation Trigger (Double Press when IDLE)
+                else if (currentVoiceState == VoiceState.IDLE) {
+                    if (currentTime - lastVolumeDownPressTime < DOUBLE_PRESS_DELAY_MS) {
+                        Log.i(TAG, "Vol Down -> DOUBLE PRESS (IDLE) -> Start New Destination Prompt")
+                        promptInitialDestination() // Trigger the voice flow
+                        lastVolumeDownPressTime = 0 // Reset time
+                        return true // Consume event
+                    } else {
+                        lastVolumeDownPressTime = currentTime
+                        Log.d(TAG,"Vol Down -> First press recorded in IDLE state.")
+                        // Don't consume, allow default volume action
+                    }
+                } else { Log.d(TAG, "Vol Down ignored: State=$currentVoiceState") }
             }
         }
-        // Allow default handling for other keys or states
         return super.onKeyDown(keyCode, event)
     }
-
 } // End of Activity
