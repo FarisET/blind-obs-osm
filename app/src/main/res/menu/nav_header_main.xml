@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:showIn="navigation_view">
+
+    <item android:title="Settings"> <!-- This is a top-level item acting as a header for a submenu -->
+        <menu> <!-- This nested <menu> creates the submenu -->
+            <group
+                android:id="@+id/scan_duration_group"
+                android:checkableBehavior="single">
+                <item
+                    android:id="@+id/nav_duration_5s"
+                    android:icon="@android:drawable/ic_menu_recent_history"
+                    android:title="Scan Duration: 5 seconds" />
+                <item
+                    android:id="@+id/nav_duration_10s"
+                    android:icon="@android:drawable/ic_menu_recent_history"
+                    android:title="Scan Duration: 10 seconds" />
+                <item
+                    android:id="@+id/nav_duration_15s"
+                    android:icon="@android:drawable/ic_menu_recent_history"
+                    android:title="Scan Duration: 15 seconds" />
+                <item
+                    android:id="@+id/nav_duration_30s"
+                    android:icon="@android:drawable/ic_menu_recent_history"
+                    android:title="Scan Duration: 30 seconds" />
+                <item
+                    android:id="@+id/nav_duration_60s"
+                    android:icon="@android:drawable/ic_menu_recent_history"
+                    android:title="Scan Duration: 60 seconds" />
+            </group>
+        </menu>
+    </item>
+
+</menu>

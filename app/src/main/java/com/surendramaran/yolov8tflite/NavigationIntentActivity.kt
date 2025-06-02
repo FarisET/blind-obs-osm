@@ -32,10 +32,16 @@ import java.io.Serializable
 import java.util.Locale
 // Assuming OsmAndHelper is imported correctly
 // import com.surendramaran.yolov8tflite.OsmAndHelper
-
+import android.view.MenuItem // Added
+import androidx.appcompat.app.ActionBarDrawerToggle // Added
+import androidx.appcompat.widget.Toolbar // Added
+import androidx.core.view.GravityCompat // Added
+import androidx.drawerlayout.widget.DrawerLayout // Added
+import com.google.android.material.navigation.NavigationView // Added
 
 class NavigationIntentActivity : AppCompatActivity(),
     OsmAndHelper.OnOsmandMissingListener,
+    NavigationView.OnNavigationItemSelectedListener,
     TextToSpeech.OnInitListener {
 
     // --- Data Class for Destination ---
@@ -48,7 +54,11 @@ class NavigationIntentActivity : AppCompatActivity(),
         private const val AUDIO_PERMISSION_REQUEST_CODE = 1004
         private const val ALL_PERMISSIONS_REQUEST_CODE = 1005
         private const val REQUEST_OSMAND_API = 1003
-        private const val SCAN_DURATION_MS = 5000L
+//        private const val SCAN_DURATION_MS = 5000L
+        private const val PREFS_NAME = "NavigationPrefs"
+        private const val KEY_SCAN_DURATION = "scanDuration"
+        private const val DEFAULT_SCAN_DURATION_MS = 5000L
+
         private const val DOUBLE_PRESS_DELAY_MS = 500
 
         // Utterance IDs
@@ -82,6 +92,15 @@ class NavigationIntentActivity : AppCompatActivity(),
     private lateinit var startNavigationButton: Button
     private lateinit var stopNavigationButton: Button
     // Removed Pause/Resume Buttons
+
+    // Navigation Drawer UI
+    private lateinit var drawerLayout: DrawerLayout
+    private lateinit var navigationView: NavigationView
+    private lateinit var toolbar: Toolbar
+    private lateinit var toggle: ActionBarDrawerToggle
+
+    // Dynamic Scan Duration
+    private var currentScanDurationMs: Long = DEFAULT_SCAN_DURATION_MS
 
     // --- Location ---
     private lateinit var fusedLocationClient: FusedLocationProviderClient
@@ -136,6 +155,9 @@ class NavigationIntentActivity : AppCompatActivity(),
         setContentView(R.layout.activity_navigation_intent)
         Log.i(TAG, "onCreate started. SavedInstanceState is null: ${savedInstanceState == null}")
 // *** Restore state BEFORE initializing everything ***
+        // Load saved scan duration
+        loadScanDuration()
+
         if (savedInstanceState != null) {
             Log.i(TAG, "Restoring instance state...")
             // Restore state (use safe defaults if key missing)
@@ -163,6 +185,8 @@ class NavigationIntentActivity : AppCompatActivity(),
 
         bindViews()
         initializeDependencies()
+        setupToolbarAndDrawer()
+
         setupUI()
         updateStatusText()
         if (!requiredPermissionsGranted) {
@@ -177,6 +201,141 @@ class NavigationIntentActivity : AppCompatActivity(),
         updateButtonStates()
         Log.i(TAG, "onCreate finished")
     }
+
+    private fun loadScanDuration() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        currentScanDurationMs = prefs.getLong(KEY_SCAN_DURATION, DEFAULT_SCAN_DURATION_MS)
+        Log.i(TAG, "Loaded scan duration: $currentScanDurationMs ms")
+    }
+
+    private fun saveScanDuration(durationMs: Long) {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        prefs.edit().putLong(KEY_SCAN_DURATION, durationMs).apply()
+        currentScanDurationMs = durationMs
+        Log.i(TAG, "Saved scan duration: $currentScanDurationMs ms")
+        Toast.makeText(this, "Scan duration set to ${durationMs / 1000}s", Toast.LENGTH_SHORT).show()
+
+    }
+
+
+    private fun bindViews() {
+        statusText = findViewById(R.id.statusText)
+        sourceCoordinatesText = findViewById(R.id.sourceCoordinatesText)
+        destinationSpinner = findViewById(R.id.destinationSpinner)
+        selectedDestinationText = findViewById(R.id.selectedDestinationText)
+        startNavigationButton = findViewById(R.id.startNavigationButton)
+        stopNavigationButton = findViewById(R.id.stopNavigationButton)
+
+        // Drawer views
+        toolbar = findViewById(R.id.toolbar)
+        drawerLayout = findViewById(R.id.drawer_layout)
+        navigationView = findViewById(R.id.nav_view)
+    }
+
+    private fun setupToolbarAndDrawer() {
+        setSupportActionBar(toolbar)
+        supportActionBar?.title = "Voice Navigation" // Or your app name
+
+        toggle = ActionBarDrawerToggle(
+            this, drawerLayout, toolbar,
+            R.string.navigation_drawer_open, R.string.navigation_drawer_close
+        )
+        drawerLayout.addDrawerListener(toggle)
+        toggle.syncState()
+
+        navigationView.setNavigationItemSelectedListener(this) // 'this' implements OnNavigationItemSelectedListener
+
+        // Set initial checked item in drawer based on loaded scan duration
+        updateDrawerMenuSelection()
+    }
+
+    private fun updateDrawerMenuSelection() {
+        val menu = navigationView.menu
+        // Deselect all first (optional, but good for safety if logic changes)
+        // menu.findItem(R.id.nav_duration_5s)?.isChecked = false
+        // ... for all items
+
+        when (currentScanDurationMs) {
+            5000L -> menu.findItem(R.id.nav_duration_5s)?.isChecked = true
+            10000L -> menu.findItem(R.id.nav_duration_10s)?.isChecked = true
+            15000L -> menu.findItem(R.id.nav_duration_15s)?.isChecked = true
+            30000L -> menu.findItem(R.id.nav_duration_30s)?.isChecked = true
+            60000L -> menu.findItem(R.id.nav_duration_60s)?.isChecked = true
+            else -> menu.findItem(R.id.nav_duration_5s)?.isChecked = true // Default if something is off
+        }
+    }
+
+
+    // --- NavigationView.OnNavigationItemSelectedListener ---
+    override fun onNavigationItemSelected(item: MenuItem): Boolean {
+        val newDurationMs = when (item.itemId) {
+            R.id.nav_duration_5s -> 5000L
+            R.id.nav_duration_10s -> 10000L
+            R.id.nav_duration_15s -> 15000L
+            R.id.nav_duration_30s -> 30000L
+            R.id.nav_duration_60s -> 60000L
+            else -> -1L // Should not happen
+        }
+
+        if (newDurationMs != -1L && newDurationMs != currentScanDurationMs) {
+            saveScanDuration(newDurationMs)
+        }
+
+        item.isChecked = true // This makes the item appear selected
+        drawerLayout.closeDrawer(GravityCompat.START)
+        return true
+    }
+
+    // --- Handle Toolbar menu item clicks (if any, like hamburger) ---
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        if (toggle.onOptionsItemSelected(item)) {
+            return true
+        }
+        // Handle other action bar items here if you have them.
+        return super.onOptionsItemSelected(item)
+    }
+
+    // --- Handle Back Press for Drawer ---
+    override fun onBackPressed() {
+        if (drawerLayout.isDrawerOpen(GravityCompat.START)) {
+            drawerLayout.closeDrawer(GravityCompat.START)
+        } else {
+            super.onBackPressed()
+        }
+    }
+
+
+    // --- Obstacle Scan Trigger ---
+    private fun triggerObstacleScan() {
+        Log.i(TAG, "Attempting to trigger obstacle scan with duration: $currentScanDurationMs ms")
+        if (currentVoiceState != VoiceState.NAVIGATION_ACTIVE) {
+            Log.w(TAG, "Scan requested but navigation not active.")
+            speak(UTT_SCAN_TRIGGER_ERROR, "Navigation needs to be active to scan.")
+            return
+        }
+        if (isListening) {
+            Log.w(TAG, "Scan trigger ignored, currently listening.")
+            return
+        }
+
+        currentVoiceState = VoiceState.SCANNING_ACTIVE
+        updateStatusText()
+        updateButtonStates()
+
+        try {
+            val intent = Intent(this, LiveCameraActivity::class.java)
+            // Use the dynamic duration
+            intent.putExtra("SCAN_DURATION", currentScanDurationMs)
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to launch LiveCameraActivity", e)
+            speak(UTT_SCAN_TRIGGER_ERROR, "Could not start obstacle scanner.")
+            currentVoiceState = VoiceState.NAVIGATION_ACTIVE
+            updateStatusText()
+            updateButtonStates()
+        }
+    }
+
 
     // *** Add onSaveInstanceState ***
     override fun onSaveInstanceState(outState: Bundle) {
@@ -233,15 +392,15 @@ class NavigationIntentActivity : AppCompatActivity(),
     }
 
     // --- Initialization ---
-    private fun bindViews() {
-        statusText = findViewById(R.id.statusText)
-        sourceCoordinatesText = findViewById(R.id.sourceCoordinatesText)
-        destinationSpinner = findViewById(R.id.destinationSpinner)
-        selectedDestinationText = findViewById(R.id.selectedDestinationText)
-        startNavigationButton = findViewById(R.id.startNavigationButton)
-        stopNavigationButton = findViewById(R.id.stopNavigationButton)
-        // Removed Pause/Resume findViewById
-    }
+//    private fun bindViews() {
+//        statusText = findViewById(R.id.statusText)
+//        sourceCoordinatesText = findViewById(R.id.sourceCoordinatesText)
+//        destinationSpinner = findViewById(R.id.destinationSpinner)
+//        selectedDestinationText = findViewById(R.id.selectedDestinationText)
+//        startNavigationButton = findViewById(R.id.startNavigationButton)
+//        stopNavigationButton = findViewById(R.id.stopNavigationButton)
+//        // Removed Pause/Resume findViewById
+//    }
 
     private fun initializeDependencies() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
@@ -617,36 +776,36 @@ class NavigationIntentActivity : AppCompatActivity(),
 
     // --- Obstacle Scan Trigger ---
     // Modified to be called by Volume Button press or voice command
-    private fun triggerObstacleScan() {
-        Log.i(TAG, "Attempting to trigger obstacle scan...")
-        if (currentVoiceState != VoiceState.NAVIGATION_ACTIVE) {
-            Log.w(TAG, "Scan requested but navigation not active.")
-            speak(UTT_SCAN_TRIGGER_ERROR, "Navigation needs to be active to scan.")
-            return
-        }
-        // Prevent triggering if already scanning
-        if (isListening) {
-            Log.w(TAG, "Scan trigger ignored, currently listening.")
-            return
-        }
-
-        currentVoiceState = VoiceState.SCANNING_ACTIVE
-        updateStatusText()
-        updateButtonStates() // Visually disable nav buttons during scan
-
-        try {
-            val intent = Intent(this, LiveCameraActivity::class.java)
-            intent.putExtra("SCAN_DURATION", SCAN_DURATION_MS)
-            startActivity(intent)
-            // State will be reset in onResume when user returns or scan finishes
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to launch LiveCameraActivity", e)
-            speak(UTT_SCAN_TRIGGER_ERROR, "Could not start obstacle scanner.")
-            currentVoiceState = VoiceState.NAVIGATION_ACTIVE // Revert state on error
-            updateStatusText()
-            updateButtonStates()
-        }
-    }
+//    private fun triggerObstacleScan() {
+//        Log.i(TAG, "Attempting to trigger obstacle scan...")
+//        if (currentVoiceState != VoiceState.NAVIGATION_ACTIVE) {
+//            Log.w(TAG, "Scan requested but navigation not active.")
+//            speak(UTT_SCAN_TRIGGER_ERROR, "Navigation needs to be active to scan.")
+//            return
+//        }
+//        // Prevent triggering if already scanning
+//        if (isListening) {
+//            Log.w(TAG, "Scan trigger ignored, currently listening.")
+//            return
+//        }
+//
+//        currentVoiceState = VoiceState.SCANNING_ACTIVE
+//        updateStatusText()
+//        updateButtonStates() // Visually disable nav buttons during scan
+//
+//        try {
+//            val intent = Intent(this, LiveCameraActivity::class.java)
+//            intent.putExtra("SCAN_DURATION", SCAN_DURATION_MS)
+//            startActivity(intent)
+//            // State will be reset in onResume when user returns or scan finishes
+//        } catch (e: Exception) {
+//            Log.e(TAG, "Failed to launch LiveCameraActivity", e)
+//            speak(UTT_SCAN_TRIGGER_ERROR, "Could not start obstacle scanner.")
+//            currentVoiceState = VoiceState.NAVIGATION_ACTIVE // Revert state on error
+//            updateStatusText()
+//            updateButtonStates()
+//        }
+//    }
 
     // --- Permission Handling ---
     private fun checkAndRequestPermissions() {
