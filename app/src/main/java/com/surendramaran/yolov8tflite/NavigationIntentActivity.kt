@@ -115,7 +115,11 @@ class NavigationIntentActivity : AppCompatActivity(),
         FixedDestination("Mian Abdullah Library", "Near Adamjee Academic Block", 24.94086575, 67.1150593333021),
         FixedDestination("IBA Soccer Field", "Near NBP Building", 24.94172, 67.11383),
         FixedDestination("Mubarak Masjid","Q2WV+66J, DHA Phase 5", 24.79540, 67.04332),
-        FixedDestination("Falah Masjid","V3C2+GMR, Al-Falah Rd, Block 2 P.E.C.H.S.", 24.87137, 67.05169)
+        FixedDestination("Falah Masjid","V3C2+GMR, Al-Falah Rd, Block 2 P.E.C.H.S.", 24.87137, 67.05169),
+        FixedDestination("Adamjee Cafe","IBA Main Campus, Karachi", 24.94041, 67.11378),
+        FixedDestination("Students' Centre","IBA Main Campus, Karachi", 24.94054, 67.11288),
+        FixedDestination("IBA Masjid","IBA Main Campus, Karachi", 24.94116, 67.11460),
+        FixedDestination("Adamjee Building","IBA Main Campus, Karachi", 24.94004,67.11429)
 
     )
 
