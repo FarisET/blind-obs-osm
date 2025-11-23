@@ -1,7 +1,7 @@
-## YOLOv8 Live Object Detection Android Application
 
-### Notice
-This project has been moved to a new repository. You can find the latest version and updates [here](https://github.com/surendramaran/YOLO).
+## Voice Activated OSM Navigation
+## YOLOv8 Live Object Detection Android Application
+# Project Demo: https://www.youtube.com/watch?v=8YBo-T5BnVM&list=PLtEf2A4FnvSGeyLG-jREyUY2pA75GmT_J&index=3
 
 ### Description
 This Android application is designed to perform live object detection using the YOLOv8 machine learning model. YOLOv8 (You Only Look Once version 8) is known for its real-time object detection capabilities, and this app brings that functionality to Android devices.
