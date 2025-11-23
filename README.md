@@ -1,11 +1,15 @@
 
-## Voice Activated OSM Navigation
-## YOLOv8 Live Object Detection Android Application
-# Project Demo: https://www.youtube.com/watch?v=8YBo-T5BnVM&list=PLtEf2A4FnvSGeyLG-jREyUY2pA75GmT_J&index=3
+## Blind Navigation System 
+Voice-Activated OSM Navigation + YOLOv8 Live Object Detection Android Application
+
+### Project Demo: 
+https://www.youtube.com/watch?v=8YBo-T5BnVM&list=PLtEf2A4FnvSGeyLG-jREyUY2pA75GmT_J&index=3
 
 ### Description
-This Android application is designed to perform live object detection using the YOLOv8 machine learning model. YOLOv8 (You Only Look Once version 8) is known for its real-time object detection capabilities, and this app brings that functionality to Android devices.
-
+-This Android application is designed to perform live object detection using the YOLOv8 machine learning model. YOLOv8 (You Only Look Once version 8) is known for its real-time object detection capabilities, and this app brings that functionality to Android devices.
+-Hotkeys for start/stop navigation and voice-activated and guide queues for blind assistance.
+- Open Street Maps Integration with AIDL in Android Studio
+- YoloV8n model embedded in mobile app
 ### Getting Started
 To use this repository for any custom YOLOv8 Object detection model, follow these steps:
 1. Clone this repository to your local machine using `git clone https://github.com/surendramaran/YOLOv8-TfLite-Object-Detector`.
